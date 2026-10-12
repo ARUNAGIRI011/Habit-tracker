@@ -1,0 +1,181 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile representation in HabitFlow",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "maxLength": 254 },
+        "displayName": { "type": "string", "maxLength": 100 },
+        "photoURL": { "type": "string", "maxLength": 500 },
+        "timezone": { "type": "string", "maxLength": 50 },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["email", "displayName"]
+    },
+    "Tenant": {
+      "title": "Tenant",
+      "description": "Personal or organization workspace container",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "maxLength": 100 },
+        "type": { "type": "string", "enum": ["personal", "organization"] },
+        "ownerId": { "type": "string", "maxLength": 128 },
+        "plan": { "type": "string", "enum": ["free", "plus", "pro", "team"] },
+        "status": { "type": "string", "enum": ["active", "trialing", "past_due", "cancelled"] },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["name", "type", "ownerId", "plan", "status"]
+    },
+    "TenantMember": {
+      "title": "TenantMember",
+      "description": "Membership mapping between a user and a tenant",
+      "type": "object",
+      "properties": {
+        "tenantId": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "role": { "type": "string", "enum": ["owner", "admin", "member"] },
+        "email": { "type": "string", "maxLength": 254 },
+        "joinedAt": { "type": "string" }
+      },
+      "required": ["tenantId", "userId", "role", "email"]
+    },
+    "Habit": {
+      "title": "Habit",
+      "description": "A habit configured in a tenant workspace",
+      "type": "object",
+      "properties": {
+        "tenantId": { "type": "string", "maxLength": 128 },
+        "creatorId": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 120 },
+        "description": { "type": "string", "maxLength": 500 },
+        "category": { "type": "string", "maxLength": 50 },
+        "color": { "type": "string", "maxLength": 20 },
+        "icon": { "type": "string", "maxLength": 30 },
+        "frequency": { "type": "string", "enum": ["daily", "weekdays", "weekends", "custom"] },
+        "targetDays": { "type": "string", "maxLength": 50 },
+        "targetValue": { "type": "number" },
+        "unit": { "type": "string", "maxLength": 30 },
+        "reminderTime": { "type": "string", "maxLength": 10 },
+        "archived": { "type": "boolean" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["tenantId", "creatorId", "name", "category", "frequency", "archived"]
+    },
+    "HabitCompletion": {
+      "title": "HabitCompletion",
+      "description": "Daily completion record for a habit",
+      "type": "object",
+      "properties": {
+        "tenantId": { "type": "string", "maxLength": 128 },
+        "habitId": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "date": { "type": "string", "maxLength": 10 },
+        "completed": { "type": "boolean" },
+        "value": { "type": "number" },
+        "notes": { "type": "string", "maxLength": 300 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["tenantId", "habitId", "userId", "date", "completed"]
+    },
+    "Subscription": {
+      "title": "Subscription",
+      "description": "Tenant subscription record and billing state",
+      "type": "object",
+      "properties": {
+        "tenantId": { "type": "string", "maxLength": 128 },
+        "planId": { "type": "string", "maxLength": 50 },
+        "status": { "type": "string", "enum": ["active", "trialing", "expired", "cancelled"] },
+        "billingCycle": { "type": "string", "enum": ["monthly", "yearly"] },
+        "currentPeriodEnd": { "type": "string" },
+        "razorpayOrderId": { "type": "string", "maxLength": 100 },
+        "razorpayPaymentId": { "type": "string", "maxLength": 100 },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["tenantId", "planId", "status"]
+    },
+    "PaymentTransaction": {
+      "title": "PaymentTransaction",
+      "description": "Audited payment transaction log",
+      "type": "object",
+      "properties": {
+        "tenantId": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "maxLength": 128 },
+        "orderId": { "type": "string", "maxLength": 100 },
+        "paymentId": { "type": "string", "maxLength": 100 },
+        "amount": { "type": "number" },
+        "currency": { "type": "string", "maxLength": 10 },
+        "status": { "type": "string", "maxLength": 30 },
+        "planId": { "type": "string", "maxLength": 50 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["tenantId", "userId", "orderId", "amount", "currency", "status"]
+    },
+    "Invitation": {
+      "title": "Invitation",
+      "description": "Pending invitation to join an organization tenant",
+      "type": "object",
+      "properties": {
+        "tenantId": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "maxLength": 254 },
+        "role": { "type": "string", "enum": ["admin", "member"] },
+        "invitedBy": { "type": "string", "maxLength": 128 },
+        "status": { "type": "string", "enum": ["pending", "accepted", "revoked"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["tenantId", "email", "role", "invitedBy", "status"]
+    },
+    "Admin": {
+      "title": "Admin",
+      "description": "Platform administrator privilege document",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "maxLength": 254 },
+        "role": { "type": "string", "maxLength": 50 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["email", "role"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile collection"
+    },
+    "/tenants/{tenantId}": {
+      "schema": "Tenant",
+      "description": "Tenant workspace containers"
+    },
+    "/tenant_members/{memberId}": {
+      "schema": "TenantMember",
+      "description": "Tenant membership association documents"
+    },
+    "/habits/{habitId}": {
+      "schema": "Habit",
+      "description": "Habit definition documents"
+    },
+    "/habit_completions/{completionId}": {
+      "schema": "HabitCompletion",
+      "description": "Daily habit completion records"
+    },
+    "/subscriptions/{tenantId}": {
+      "schema": "Subscription",
+      "description": "Tenant subscription statuses"
+    },
+    "/payment_transactions/{transactionId}": {
+      "schema": "PaymentTransaction",
+      "description": "Audited payment transaction records"
+    },
+    "/invitations/{invitationId}": {
+      "schema": "Invitation",
+      "description": "Organization invitations"
+    },
+    "/admins/{userId}": {
+      "schema": "Admin",
+      "description": "Platform administrator whitelist"
+    }
+  }
+}

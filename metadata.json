@@ -1,0 +1,6 @@
+{
+  "name": "HabitFlow SaaS",
+  "description": "Multi-tenant habit tracking SaaS platform with streaks, analytics, team workspaces, and AI coaching.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,281 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        (request.auth.token.email == 'arunagirinathan6@gmail.com' && request.auth.token.email_verified == true)
+      );
+    }
+
+    // Tenant membership helpers
+    function isTenantOwner(tenantId) {
+      return isSignedIn() && (
+        get(/databases/$(database)/documents/tenants/$(tenantId)).data.ownerId == request.auth.uid
+      );
+    }
+
+    // Validation blueprints
+    function isValidUser(data) {
+      return data.keys().hasAll(['email', 'displayName']) &&
+        data.email is string && data.email.size() <= 254 &&
+        data.displayName is string && data.displayName.size() <= 100;
+    }
+
+    function isValidTenant(data) {
+      return data.keys().hasAll(['name', 'type', 'ownerId', 'plan', 'status']) &&
+        data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+        data.type in ['personal', 'organization'] &&
+        data.ownerId is string && data.ownerId.size() <= 128 &&
+        data.plan in ['free', 'plus', 'pro', 'team'] &&
+        data.status in ['active', 'trialing', 'past_due', 'cancelled'];
+    }
+
+    function isValidHabit(data) {
+      return data.keys().hasAll(['tenantId', 'creatorId', 'name', 'category', 'frequency', 'archived']) &&
+        data.tenantId is string && data.tenantId.size() <= 128 &&
+        data.creatorId is string && data.creatorId.size() <= 128 &&
+        data.name is string && data.name.size() > 0 && data.name.size() <= 120 &&
+        data.category is string && data.category.size() <= 50 &&
+        data.frequency in ['daily', 'weekdays', 'weekends', 'custom'] &&
+        data.archived is bool;
+    }
+
+    function isValidCompletion(data) {
+      return data.keys().hasAll(['tenantId', 'habitId', 'userId', 'date', 'completed']) &&
+        data.tenantId is string && data.tenantId.size() <= 128 &&
+        data.habitId is string && data.habitId.size() <= 128 &&
+        data.userId is string && data.userId.size() <= 128 &&
+        data.date is string && data.date.size() <= 10 &&
+        data.completed is bool;
+    }
+
+    function isValidSubscription(data) {
+      return data.keys().hasAll(['tenantId', 'planId', 'status']) &&
+        data.tenantId is string && data.tenantId.size() <= 128 &&
+        data.planId is string && data.planId.size() <= 50 &&
+        data.status in ['active', 'trialing', 'expired', 'cancelled'];
+    }
+
+    function isValidPayment(data) {
+      return data.keys().hasAll(['tenantId', 'userId', 'orderId', 'amount', 'currency', 'status']) &&
+        data.tenantId is string && data.tenantId.size() <= 128 &&
+        data.userId is string && data.userId.size() <= 128 &&
+        data.orderId is string && data.orderId.size() <= 100 &&
+        data.amount is number && data.amount >= 0 &&
+        data.currency is string && data.currency.size() <= 10 &&
+        data.status is string && data.status.size() <= 30;
+    }
+
+    function isValidInvitation(data) {
+      return data.keys().hasAll(['tenantId', 'email', 'role', 'invitedBy', 'status']) &&
+        data.tenantId is string && data.tenantId.size() <= 128 &&
+        data.email is string && data.email.size() <= 254 &&
+        data.role in ['admin', 'member'] &&
+        data.invitedBy is string && data.invitedBy.size() <= 128 &&
+        data.status in ['pending', 'accepted', 'revoked'];
+    }
+
+    // Collection rules
+
+    // 1. Users
+    match /users/{userId} {
+      allow get: if isOwner(userId) || isAdmin();
+      allow list: if isAdmin();
+      allow create: if isOwner(userId) && isValidUser(incoming());
+      allow update: if (isOwner(userId) || isAdmin()) && isValidUser(incoming()) &&
+        incoming().email == existing().email;
+      allow delete: if isOwner(userId) || isAdmin();
+    }
+
+    // 2. Tenants
+    match /tenants/{tenantId} {
+      allow get: if isSignedIn() && (
+        existing().ownerId == request.auth.uid ||
+        isAdmin()
+      );
+      allow list: if isSignedIn() && (
+        resource.data.ownerId == request.auth.uid ||
+        isAdmin()
+      );
+      allow create: if isSignedIn() &&
+        incoming().ownerId == request.auth.uid &&
+        isValidTenant(incoming());
+      allow update: if isSignedIn() && (
+        (existing().ownerId == request.auth.uid && incoming().ownerId == existing().ownerId && isValidTenant(incoming())) ||
+        isAdmin()
+      );
+      allow delete: if isSignedIn() && (existing().ownerId == request.auth.uid || isAdmin());
+    }
+
+    // 3. Tenant Members
+    match /tenant_members/{memberId} {
+      allow get: if isSignedIn() && (
+        existing().userId == request.auth.uid ||
+        isTenantOwner(existing().tenantId) ||
+        isAdmin()
+      );
+      allow list: if isSignedIn() && (
+        resource.data.userId == request.auth.uid ||
+        isAdmin()
+      );
+      allow create: if isSignedIn() && (
+        isTenantOwner(incoming().tenantId) ||
+        incoming().userId == request.auth.uid ||
+        isAdmin()
+      );
+      allow update: if isSignedIn() && (
+        (isTenantOwner(existing().tenantId) && incoming().tenantId == existing().tenantId) ||
+        isAdmin()
+      );
+      allow delete: if isSignedIn() && (
+        existing().userId == request.auth.uid ||
+        isTenantOwner(existing().tenantId) ||
+        isAdmin()
+      );
+    }
+
+    // 4. Habits
+    match /habits/{habitId} {
+      allow get: if isSignedIn() && (
+        existing().creatorId == request.auth.uid ||
+        isTenantOwner(existing().tenantId) ||
+        isAdmin()
+      );
+      allow list: if isSignedIn() && (
+        resource.data.creatorId == request.auth.uid ||
+        isAdmin()
+      );
+      allow create: if isSignedIn() &&
+        incoming().creatorId == request.auth.uid &&
+        isValidHabit(incoming());
+      allow update: if isSignedIn() &&
+        (existing().creatorId == request.auth.uid || isTenantOwner(existing().tenantId) || isAdmin()) &&
+        incoming().creatorId == existing().creatorId &&
+        incoming().tenantId == existing().tenantId &&
+        isValidHabit(incoming());
+      allow delete: if isSignedIn() && (
+        existing().creatorId == request.auth.uid ||
+        isTenantOwner(existing().tenantId) ||
+        isAdmin()
+      );
+    }
+
+    // 5. Habit Completions
+    match /habit_completions/{completionId} {
+      allow get: if isSignedIn() && (
+        existing().userId == request.auth.uid ||
+        isTenantOwner(existing().tenantId) ||
+        isAdmin()
+      );
+      allow list: if isSignedIn() && (
+        resource.data.userId == request.auth.uid ||
+        isAdmin()
+      );
+      allow create: if isSignedIn() &&
+        incoming().userId == request.auth.uid &&
+        isValidCompletion(incoming());
+      allow update: if isSignedIn() &&
+        (existing().userId == request.auth.uid || isAdmin()) &&
+        incoming().userId == existing().userId &&
+        incoming().habitId == existing().habitId &&
+        incoming().tenantId == existing().tenantId &&
+        isValidCompletion(incoming());
+      allow delete: if isSignedIn() && (
+        existing().userId == request.auth.uid ||
+        isTenantOwner(existing().tenantId) ||
+        isAdmin()
+      );
+    }
+
+    // 6. Subscriptions
+    match /subscriptions/{tenantId} {
+      allow get: if isSignedIn() && (
+        isTenantOwner(tenantId) ||
+        isAdmin()
+      );
+      allow list: if isAdmin();
+      allow create, update: if isSignedIn() && (
+        isTenantOwner(tenantId) ||
+        isAdmin()
+      ) && isValidSubscription(incoming());
+      allow delete: if isAdmin();
+    }
+
+    // 7. Payment Transactions
+    match /payment_transactions/{transactionId} {
+      allow get: if isSignedIn() && (
+        existing().userId == request.auth.uid ||
+        isTenantOwner(existing().tenantId) ||
+        isAdmin()
+      );
+      allow list: if isSignedIn() && (
+        resource.data.userId == request.auth.uid ||
+        isAdmin()
+      );
+      allow create: if isSignedIn() &&
+        incoming().userId == request.auth.uid &&
+        isValidPayment(incoming());
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // 8. Invitations
+    match /invitations/{invitationId} {
+      allow get: if isSignedIn() && (
+        existing().email == request.auth.token.email ||
+        isTenantOwner(existing().tenantId) ||
+        isAdmin()
+      );
+      allow list: if isSignedIn() && (
+        resource.data.email == request.auth.token.email ||
+        isAdmin()
+      );
+      allow create: if isSignedIn() &&
+        (isTenantOwner(incoming().tenantId) || isAdmin()) &&
+        isValidInvitation(incoming());
+      allow update: if isSignedIn() && (
+        (existing().email == request.auth.token.email && incoming().status in ['accepted', 'revoked']) ||
+        isTenantOwner(existing().tenantId) ||
+        isAdmin()
+      );
+      allow delete: if isSignedIn() && (
+        isTenantOwner(existing().tenantId) ||
+        isAdmin()
+      );
+    }
+
+    // 9. Admins
+    match /admins/{userId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+  }
+}
